@@ -621,3 +621,5 @@ const std::string knn_jni::M_NMSLIB = "M";
 const std::string knn_jni::EF_CONSTRUCTION = "ef_construction";
 const std::string knn_jni::EF_CONSTRUCTION_NMSLIB = "efConstruction";
 const std::string knn_jni::EF_SEARCH = "ef_search";
+const std::string knn_jni::USE_BF16_SEARCH = "use_bf16_search";
+const std::string knn_jni::USE_AMX = "use_amx";

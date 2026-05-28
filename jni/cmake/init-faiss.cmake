@@ -90,7 +90,7 @@ endif()
 find_package(ZLIB REQUIRED)
 
 # Statically link BLAS - ensure this is before we find the blas package so we dont dynamically link
-set(BLA_STATIC ON)
+set(BLA_STATIC OFF)
 find_package(BLAS REQUIRED)
 enable_language(Fortran)
 find_package(LAPACK REQUIRED)
@@ -136,3 +136,8 @@ else()
 endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/external/faiss EXCLUDE_FROM_ALL)
+
+# Add AMX compile flags for BF16+AMX HNSW acceleration on SPR+ platforms
+if(${CMAKE_SYSTEM_NAME} STREQUAL Linux AND AVX512_SPR_ENABLED)
+    target_compile_options(faiss_avx512_spr PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-mamx-tile -mamx-bf16 -mamx-int8>)
+endif()

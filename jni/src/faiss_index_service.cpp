@@ -51,6 +51,17 @@ void SetExtraParameters(knn_jni::JNIUtilInterface * jniUtil, JNIEnv *env,
             indexHnsw->hnsw.efSearch = jniUtil->ConvertJavaObjectToCppInteger(env, value->second);
         }
     }
+
+    // BF16+AMX params only apply to faiss::IndexHNSW (not binary)
+    if (auto * indexHnswFloat = dynamic_cast<faiss::IndexHNSW*>(index)) {
+        if ((value = parametersCpp.find(knn_jni::USE_BF16_SEARCH)) != parametersCpp.end()) {
+            indexHnswFloat->use_bf16_search = (bool)jniUtil->ConvertJavaObjectToCppInteger(env, value->second);
+        }
+
+        if ((value = parametersCpp.find(knn_jni::USE_AMX)) != parametersCpp.end()) {
+            indexHnswFloat->use_amx = (bool)jniUtil->ConvertJavaObjectToCppInteger(env, value->second);
+        }
+    }
 }
 
 IndexService::IndexService(std::unique_ptr<FaissMethods> _faissMethods) : faissMethods(std::move(_faissMethods)) {}
@@ -143,6 +154,13 @@ void IndexService::writeIndex(
     jlong idMapAddress
 ) {
     std::unique_ptr<faiss::IndexIDMap> idMap (reinterpret_cast<faiss::IndexIDMap *> (idMapAddress));
+
+    // Build BF16 storage if enabled (must happen after all vectors are added)
+    if (auto * indexHnsw = dynamic_cast<faiss::IndexHNSW*>(idMap->index)) {
+        if (indexHnsw->use_bf16_search) {
+            indexHnsw->build_bf16_storage();
+        }
+    }
 
     try {
         // Write the index to disk

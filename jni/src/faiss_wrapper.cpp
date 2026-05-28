@@ -261,6 +261,13 @@ void knn_jni::faiss_wrapper::CreateIndexFromTemplate(knn_jni::JNIUtilInterface *
     // https://github.com/opensearch-project/k-NN/issues/1600
     delete inputVectors;
 
+    // Build BF16 storage if enabled (must happen after all vectors are added)
+    if (auto * indexHnsw = dynamic_cast<faiss::IndexHNSW*>(indexWriter.get())) {
+        if (indexHnsw->use_bf16_search) {
+            indexHnsw->build_bf16_storage();
+        }
+    }
+
     // Write the index to disk
     knn_jni::stream::NativeEngineIndexOutputMediator mediator {jniUtil, env, output};
     knn_jni::stream::FaissOpenSearchIOWriter writer {&mediator};
@@ -428,6 +435,13 @@ void knn_jni::faiss_wrapper::CreateByteIndexFromTemplate(knn_jni::JNIUtilInterfa
     // https://github.com/opensearch-project/k-NN/issues/1600
     delete inputVectors;
 
+    // Build BF16 storage if enabled (must happen after all vectors are added)
+    if (auto * indexHnsw = dynamic_cast<faiss::IndexHNSW*>(indexWriter.get())) {
+        if (indexHnsw->use_bf16_search) {
+            indexHnsw->build_bf16_storage();
+        }
+    }
+
     // Write the index to disk
     knn_jni::stream::NativeEngineIndexOutputMediator mediator {jniUtil, env, output};
     knn_jni::stream::FaissOpenSearchIOWriter writer {&mediator};
@@ -534,7 +548,8 @@ void knn_jni::faiss_wrapper::SetSharedIndexState(jlong indexPointerJ, jlong shar
     // want is 1.
     // (ref: https://github.com/facebookresearch/faiss/blob/v1.8.0/faiss/IndexIVFPQ.cpp#L383-L410)
     int usePrecomputedTable = 1;
-    indexIVFPQ->set_precomputed_table(alignTable, usePrecomputedTable);
+    indexIVFPQ->use_precomputed_table = usePrecomputedTable;
+    indexIVFPQ->precomputed_table = *alignTable;
 }
 
 jobjectArray knn_jni::faiss_wrapper::QueryIndex(knn_jni::JNIUtilInterface * jniUtil, JNIEnv * env, jlong indexPointerJ,
@@ -1046,6 +1061,14 @@ void SetExtraParameters(knn_jni::JNIUtilInterface * jniUtil, JNIEnv *env,
 
         if ((value = parametersCpp.find(knn_jni::EF_SEARCH)) != parametersCpp.end()) {
             indexHnsw->hnsw.efSearch = jniUtil->ConvertJavaObjectToCppInteger(env, value->second);
+        }
+
+        if ((value = parametersCpp.find(knn_jni::USE_BF16_SEARCH)) != parametersCpp.end()) {
+            indexHnsw->use_bf16_search = (bool)jniUtil->ConvertJavaObjectToCppInteger(env, value->second);
+        }
+
+        if ((value = parametersCpp.find(knn_jni::USE_AMX)) != parametersCpp.end()) {
+            indexHnsw->use_amx = (bool)jniUtil->ConvertJavaObjectToCppInteger(env, value->second);
         }
     }
 }

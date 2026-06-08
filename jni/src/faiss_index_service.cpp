@@ -51,17 +51,6 @@ void SetExtraParameters(knn_jni::JNIUtilInterface * jniUtil, JNIEnv *env,
             indexHnsw->hnsw.efSearch = jniUtil->ConvertJavaObjectToCppInteger(env, value->second);
         }
     }
-
-    // BF16+AMX params only apply to faiss::IndexHNSW (not binary)
-    if (auto * indexHnswFloat = dynamic_cast<faiss::IndexHNSW*>(index)) {
-        if ((value = parametersCpp.find(knn_jni::USE_BF16_SEARCH)) != parametersCpp.end()) {
-            indexHnswFloat->use_bf16_search = (bool)jniUtil->ConvertJavaObjectToCppInteger(env, value->second);
-        }
-
-        if ((value = parametersCpp.find(knn_jni::USE_AMX)) != parametersCpp.end()) {
-            indexHnswFloat->use_amx = (bool)jniUtil->ConvertJavaObjectToCppInteger(env, value->second);
-        }
-    }
 }
 
 IndexService::IndexService(std::unique_ptr<FaissMethods> _faissMethods) : faissMethods(std::move(_faissMethods)) {}
@@ -69,12 +58,12 @@ IndexService::IndexService(std::unique_ptr<FaissMethods> _faissMethods) : faissM
 void IndexService::allocIndex(faiss::Index * index, size_t dim, size_t numVectors) {
     if (auto * indexHNSWSQ = dynamic_cast<faiss::IndexHNSWSQ *>(index)) {
         if (auto * indexScalarQuantizer = dynamic_cast<faiss::IndexScalarQuantizer *>(indexHNSWSQ->storage)) {
-            indexScalarQuantizer->codes.reserve(indexScalarQuantizer->code_size * numVectors);
+            indexScalarQuantizer->codes.owned_data.reserve(indexScalarQuantizer->code_size * numVectors);
         }
     }
     if (auto * indexHNSW = dynamic_cast<faiss::IndexHNSW *>(index)) {
         if(auto * indexFlat = dynamic_cast<faiss::IndexFlat *>(indexHNSW->storage)) {
-            indexFlat->codes.reserve(indexFlat->code_size * numVectors);
+            indexFlat->codes.owned_data.reserve(indexFlat->code_size * numVectors);
         }
     }
 }
@@ -155,13 +144,6 @@ void IndexService::writeIndex(
 ) {
     std::unique_ptr<faiss::IndexIDMap> idMap (reinterpret_cast<faiss::IndexIDMap *> (idMapAddress));
 
-    // Build BF16 storage if enabled (must happen after all vectors are added)
-    if (auto * indexHnsw = dynamic_cast<faiss::IndexHNSW*>(idMap->index)) {
-        if (indexHnsw->use_bf16_search) {
-            indexHnsw->build_bf16_storage();
-        }
-    }
-
     try {
         // Write the index to disk
         faissMethods->writeIndex(idMap.get(), writer);
@@ -180,7 +162,7 @@ BinaryIndexService::BinaryIndexService(std::unique_ptr<FaissMethods> _faissMetho
 void BinaryIndexService::allocIndex(faiss::Index * index, size_t dim, size_t numVectors) {
     if (auto * indexBinaryHNSW = dynamic_cast<faiss::IndexBinaryHNSW *>(index)) {
         auto * indexBinaryFlat = dynamic_cast<faiss::IndexBinaryFlat *>(indexBinaryHNSW->storage);
-        indexBinaryFlat->xb.reserve(dim * numVectors / 8);
+        indexBinaryFlat->xb.owned_data.reserve(dim * numVectors / 8);
     }
 }
 
@@ -277,7 +259,7 @@ ByteIndexService::ByteIndexService(std::unique_ptr<FaissMethods> _faissMethods)
 void ByteIndexService::allocIndex(faiss::Index * index, size_t dim, size_t numVectors) {
     if (auto * indexHNSWSQ = dynamic_cast<faiss::IndexHNSWSQ *>(index)) {
         if(auto * indexScalarQuantizer = dynamic_cast<faiss::IndexScalarQuantizer *>(indexHNSWSQ->storage)) {
-            indexScalarQuantizer->codes.reserve(indexScalarQuantizer->code_size * numVectors);
+            indexScalarQuantizer->codes.owned_data.reserve(indexScalarQuantizer->code_size * numVectors);
         }
     }
 }

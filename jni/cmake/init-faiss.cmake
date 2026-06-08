@@ -20,6 +20,7 @@ if(NOT DEFINED APPLY_LIB_PATCHES OR "${APPLY_LIB_PATCHES}" STREQUAL true)
     list(APPEND PATCH_FILE_LIST "${CMAKE_CURRENT_SOURCE_DIR}/patches/faiss/0002-Enable-precomp-table-to-be-shared-ivfpq.patch")
     list(APPEND PATCH_FILE_LIST "${CMAKE_CURRENT_SOURCE_DIR}/patches/faiss/0003-Custom-patch-to-support-range-search-params.patch")
     list(APPEND PATCH_FILE_LIST "${CMAKE_CURRENT_SOURCE_DIR}/patches/faiss/0004-Custom-patch-to-support-binary-vector.patch")
+    list(APPEND PATCH_FILE_LIST "${CMAKE_CURRENT_SOURCE_DIR}/patches/faiss/0005-Adapt-patches-to-faiss-main-June-2026-API.patch")
 
     # Get patch id of the last commit
     execute_process(COMMAND sh -c "git --no-pager show HEAD | git patch-id --stable" OUTPUT_VARIABLE PATCH_ID_OUTPUT_FROM_COMMIT WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/external/faiss)
@@ -137,7 +138,20 @@ endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/external/faiss EXCLUDE_FROM_ALL)
 
-# Add AMX compile flags for BF16+AMX HNSW acceleration on SPR+ platforms
+# Enable the BF16+AMX HNSW inner-product acceleration (faiss PR #5235) on SPR+
+# platforms. The AMX tile kernel lives in a dedicated SIMD source
+# (faiss/impl/scalar_quantizer/sq-amx.cpp) that upstream compiles only into the
+# separate `faiss_amx` target. Rather than introducing a new JNI library name,
+# we fold that single TU + its per-file flags + the COMPILE_SIMD_AMX macro into
+# the `faiss_avx512_spr` target that opensearch-knn already links and loads on
+# SPR+ hosts. This makes faiss_avx512_spr's source/flag/define set identical to
+# upstream's faiss_amx target, so SINGLE_SIMD_LEVEL resolves to SIMDLevel::AMX
+# and the bf16 + METRIC_INNER_PRODUCT distance computer is statically dispatched
+# to the AMX kernel (all other paths fall back to AVX512 at compile time).
 if(${CMAKE_SYSTEM_NAME} STREQUAL Linux AND AVX512_SPR_ENABLED)
-    target_compile_options(faiss_avx512_spr PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-mamx-tile -mamx-bf16 -mamx-int8>)
+    target_sources(faiss_avx512_spr PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/faiss/faiss/impl/scalar_quantizer/sq-amx.cpp)
+    target_compile_options(faiss_avx512_spr PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:-mamx-tile -mamx-bf16>)
+    target_compile_definitions(faiss_avx512_spr PRIVATE COMPILE_SIMD_AMX)
 endif()

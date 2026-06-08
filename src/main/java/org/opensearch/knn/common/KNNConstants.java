@@ -30,8 +30,6 @@ public class KNNConstants {
     public static final String METHOD_PARAMETER_EF_SEARCH = "ef_search";
     public static final String METHOD_PARAMETER_EF_CONSTRUCTION = "ef_construction";
     public static final String METHOD_PARAMETER_M = "m";
-    public static final String METHOD_PARAMETER_USE_BF16_SEARCH = "use_bf16_search";
-    public static final String METHOD_PARAMETER_USE_AMX = "use_amx";
     public static final String METHOD_IVF = "ivf";
     public static final String METHOD_PARAMETER_NLIST = "nlist";
     public static final String METHOD_PARAMETER_SPACE_TYPE = "space_type"; // used for mapping parameter
@@ -120,7 +118,11 @@ public class KNNConstants {
     public static final String FAISS_SQ_DESCRIPTION = "SQ";
     public static final String FAISS_SQ_TYPE = "type";
     public static final String FAISS_SQ_ENCODER_FP16 = "fp16";
-    public static final List<String> FAISS_SQ_ENCODER_TYPES = List.of(FAISS_SQ_ENCODER_FP16);
+    // bf16 ScalarQuantizer (QT_bf16). On SPR+ this enables the AMX BF16 tile
+    // inner-product distance computer (faiss PR #5235); the index_factory token
+    // is "SQbf16" and AMX is selected automatically at runtime for IP search.
+    public static final String FAISS_SQ_ENCODER_BF16 = "bf16";
+    public static final List<String> FAISS_SQ_ENCODER_TYPES = List.of(FAISS_SQ_ENCODER_FP16, FAISS_SQ_ENCODER_BF16);
     public static final String FAISS_SIGNED_BYTE_SQ = "SQ8_direct_signed";
     public static final String FAISS_SQ_CLIP = "clip";
 

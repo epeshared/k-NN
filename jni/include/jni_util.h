@@ -265,8 +265,6 @@ namespace knn_jni {
     extern const std::string EF_CONSTRUCTION;
     extern const std::string EF_CONSTRUCTION_NMSLIB;
     extern const std::string EF_SEARCH;
-    extern const std::string USE_BF16_SEARCH;
-    extern const std::string USE_AMX;
 
     // --------------------------------------------------------------------------
 }

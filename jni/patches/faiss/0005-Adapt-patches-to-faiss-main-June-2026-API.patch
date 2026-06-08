@@ -1,0 +1,55 @@
+From 6e57284cccfb6211ad8a379887fcfb3d04d3d19f Mon Sep 17 00:00:00 2001
+From: Xiao Tang <xtang@intel.com>
+Date: Mon, 8 Jun 2026 11:48:59 +0800
+Subject: [PATCH] Adapt OpenSearch faiss patches to faiss main (June 2026) API
+
+- ResultHandler<C> -> ResultHandlerT<C> for GroupedHeapBlockResultHandler
+  (patch 0001; ResultHandler template base was renamed upstream)
+- IndexIVFPQFastScan ctor: move precomputed_table init out of the member
+  initializer list into the body (patch 0002 fuzzy-apply landed it mid-list)
+---
+ faiss/IndexIVFPQFastScan.cpp | 4 ++--
+ faiss/impl/ResultHandler.h   | 4 ++--
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/faiss/IndexIVFPQFastScan.cpp b/faiss/IndexIVFPQFastScan.cpp
+index 0a1328ae9..e8ad259b7 100644
+--- a/faiss/IndexIVFPQFastScan.cpp
++++ b/faiss/IndexIVFPQFastScan.cpp
+@@ -42,8 +42,6 @@ IndexIVFPQFastScan::IndexIVFPQFastScan(
+         int bbs_in,
+         bool own_invlists_in)
+         : IndexIVFFastScan(
+-    precomputed_table = new AlignedTable<float>();
+-    owns_precomputed_table = true;
+                   quantizer_in,
+                   d_in,
+                   nlist_in,
+@@ -52,6 +50,8 @@ IndexIVFPQFastScan::IndexIVFPQFastScan(
+                   own_invlists_in),
+           pq(d_in, M_in, nbits_in) {
+     by_residual = false; // set to false by default because it's faster
++    precomputed_table = new AlignedTable<float>();
++    owns_precomputed_table = true;
+ 
+     init_fastscan(
+             &pq, M_in, nbits_in, nlist_in, metric, bbs_in, own_invlists_in);
+diff --git a/faiss/impl/ResultHandler.h b/faiss/impl/ResultHandler.h
+index ca3d34ee9..2d9148c68 100644
+--- a/faiss/impl/ResultHandler.h
++++ b/faiss/impl/ResultHandler.h
+@@ -424,9 +424,9 @@ struct GroupedHeapBlockResultHandler : BlockResultHandler<C> {
+      * called from 1 thread)
+      */
+ 
+-    struct SingleResultHandler : ResultHandler<C> {
++    struct SingleResultHandler : ResultHandlerT<C> {
+         GroupedHeapBlockResultHandler& hr;
+-        using ResultHandler<C>::threshold;
++        using ResultHandlerT<C>::threshold;
+         size_t k;
+ 
+         T* heap_dis;
+-- 
+2.34.1
+

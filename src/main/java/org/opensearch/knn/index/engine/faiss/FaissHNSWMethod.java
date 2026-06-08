@@ -30,8 +30,6 @@ import static org.opensearch.knn.common.KNNConstants.METHOD_HNSW;
 import static org.opensearch.knn.common.KNNConstants.METHOD_PARAMETER_EF_CONSTRUCTION;
 import static org.opensearch.knn.common.KNNConstants.METHOD_PARAMETER_EF_SEARCH;
 import static org.opensearch.knn.common.KNNConstants.METHOD_PARAMETER_M;
-import static org.opensearch.knn.common.KNNConstants.METHOD_PARAMETER_USE_BF16_SEARCH;
-import static org.opensearch.knn.common.KNNConstants.METHOD_PARAMETER_USE_AMX;
 
 /**
  * Faiss HNSW method implementation
@@ -105,14 +103,6 @@ public class FaissHNSWMethod extends AbstractFaissMethod {
                     KNNSettings.INDEX_KNN_DEFAULT_ALGO_PARAM_EF_SEARCH,
                     (v, context) -> v > 0
                 )
-            )
-            .addParameter(
-                METHOD_PARAMETER_USE_BF16_SEARCH,
-                new Parameter.IntegerParameter(METHOD_PARAMETER_USE_BF16_SEARCH, 0, (v, context) -> v == 0 || v == 1)
-            )
-            .addParameter(
-                METHOD_PARAMETER_USE_AMX,
-                new Parameter.IntegerParameter(METHOD_PARAMETER_USE_AMX, 0, (v, context) -> v == 0 || v == 1)
             )
             .addParameter(METHOD_ENCODER_PARAMETER, initEncoderParameter())
             .setKnnLibraryIndexingContextGenerator(((methodComponent, methodComponentContext, knnMethodConfigContext) -> {

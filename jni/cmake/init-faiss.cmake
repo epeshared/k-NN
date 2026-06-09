@@ -148,7 +148,10 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/external/faiss EXCLUDE_FROM_ALL)
 # upstream's faiss_amx target, so SINGLE_SIMD_LEVEL resolves to SIMDLevel::AMX
 # and the bf16 + METRIC_INNER_PRODUCT distance computer is statically dispatched
 # to the AMX kernel (all other paths fall back to AVX512 at compile time).
-if(${CMAKE_SYSTEM_NAME} STREQUAL Linux AND AVX512_SPR_ENABLED)
+# Set -DKNN_DISABLE_AMX=ON to build the plain AVX512-SPR variant instead (bf16+IP
+# then runs on the AVX512-BF16 path) -- used for AMX-vs-AVX512 A/B and as a
+# fallback on SPR hosts without AMX.
+if(${CMAKE_SYSTEM_NAME} STREQUAL Linux AND AVX512_SPR_ENABLED AND NOT KNN_DISABLE_AMX)
     target_sources(faiss_avx512_spr PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/external/faiss/faiss/impl/scalar_quantizer/sq-amx.cpp)
     target_compile_options(faiss_avx512_spr PRIVATE

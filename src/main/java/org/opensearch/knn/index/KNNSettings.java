@@ -85,6 +85,7 @@ public class KNNSettings {
     public static final String INDEX_KNN_ADVANCED_APPROXIMATE_THRESHOLD = "index.knn.advanced.approximate_threshold";
     public static final String KNN_ALGO_PARAM_EF_SEARCH = "index.knn.algo_param.ef_search";
     public static final String KNN_ALGO_PARAM_INDEX_THREAD_QTY = "knn.algo_param.index_thread_qty";
+    public static final String KNN_BUILD_METHOD = "knn.build.method";
     public static final String KNN_MEMORY_CIRCUIT_BREAKER_ENABLED = "knn.memory.circuit_breaker.enabled";
     public static final String KNN_MEMORY_CIRCUIT_BREAKER_CLUSTER_LIMIT = "knn.memory.circuit_breaker.limit";
     public static final String KNN_MEMORY_CIRCUIT_BREAKER_LIMIT_PREFIX = KNN_MEMORY_CIRCUIT_BREAKER_CLUSTER_LIMIT + ".";
@@ -334,6 +335,20 @@ public class KNNSettings {
             }
             return value;
         },
+        NodeScope,
+        Dynamic
+    );
+
+    /**
+     * knn.build.method - how the native faiss HNSW graph is constructed:
+     * "incremental" (default, greedy per-vector insertion) or "cagra_cpu"
+     * (CAGRA-like batch build: one bf16 GEMM kNN graph + faiss pruning; AMX on
+     * GNR/SPR; only applies to HNSW+SQbf16 inner-product indices, anything else
+     * silently falls back to incremental).
+     */
+    public static final Setting<String> KNN_BUILD_METHOD_SETTING = Setting.simpleString(
+        KNN_BUILD_METHOD,
+        "incremental",
         NodeScope,
         Dynamic
     );
@@ -655,6 +670,10 @@ public class KNNSettings {
             return KNN_ALGO_PARAM_INDEX_THREAD_QTY_SETTING;
         }
 
+        if (KNN_BUILD_METHOD.equals(key)) {
+            return KNN_BUILD_METHOD_SETTING;
+        }
+
         if (ADVANCED_FILTERED_EXACT_SEARCH_THRESHOLD.equals(key)) {
             return ADVANCED_FILTERED_EXACT_SEARCH_THRESHOLD_SETTING;
         }
@@ -742,6 +761,7 @@ public class KNNSettings {
             INDEX_KNN_ADVANCED_APPROXIMATE_THRESHOLD_SETTING,
             INDEX_KNN_ALGO_PARAM_EF_SEARCH_SETTING,
             KNN_ALGO_PARAM_INDEX_THREAD_QTY_SETTING,
+            KNN_BUILD_METHOD_SETTING,
             KNN_CIRCUIT_BREAKER_TRIGGERED_SETTING,
             KNN_CIRCUIT_BREAKER_UNSET_PERCENTAGE_SETTING,
             IS_KNN_INDEX_SETTING,
@@ -1120,6 +1140,14 @@ public class KNNSettings {
      */
     public static int getIndexThreadQty() {
         return KNNSettings.state().getSettingValue(KNN_ALGO_PARAM_INDEX_THREAD_QTY);
+    }
+
+    /**
+     * Get the native graph build method ("incremental" or "cagra_cpu") from cluster setting.
+     * @return String
+     */
+    public static String getKnnBuildMethod() {
+        return KNNSettings.state().getSettingValue(KNN_BUILD_METHOD);
     }
 
     private static String percentageAsString(Integer percentage) {

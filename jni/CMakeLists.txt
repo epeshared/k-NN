@@ -113,6 +113,7 @@ if (${CONFIG_FAISS} STREQUAL ON OR ${CONFIG_ALL} STREQUAL ON OR ${CONFIG_TEST} S
         ${CMAKE_CURRENT_SOURCE_DIR}/src/faiss_wrapper.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/faiss_util.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/faiss_index_service.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/faiss_cagra_builder.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/faiss_methods.cpp
     )
     target_link_libraries(${TARGET_LIB_FAISS} ${TARGET_LINK_FAISS_LIB} ${TARGET_LIB_UTIL} OpenMP::OpenMP_CXX)
@@ -122,6 +123,22 @@ if (${CONFIG_FAISS} STREQUAL ON OR ${CONFIG_ALL} STREQUAL ON OR ${CONFIG_TEST} S
         $ENV{JAVA_HOME}/include/${JVM_OS_TYPE}
         ${CMAKE_CURRENT_SOURCE_DIR}/external/faiss
     )
+    # CAGRA-like batch build needs MKL's bf16 GEMM (cblas_gemm_bf16bf16f32, AMX on GNR/SPR).
+    # Off by default: without it build_method=cagra_cpu falls back to incremental build.
+    option(KNN_LINK_MKL "Link Intel MKL to enable the CAGRA-like AMX batch build" OFF)
+    if (KNN_LINK_MKL)
+        find_path(MKL_INCLUDE_DIR mkl.h HINTS $ENV{MKLROOT}/include /opt/intel/oneapi/mkl/latest/include)
+        find_library(MKL_RT_LIB mkl_rt HINTS $ENV{MKLROOT}/lib $ENV{MKLROOT}/lib/intel64 /opt/intel/oneapi/mkl/latest/lib)
+        if (MKL_INCLUDE_DIR AND MKL_RT_LIB)
+            target_compile_definitions(${TARGET_LIB_FAISS} PRIVATE KNN_WITH_MKL)
+            target_include_directories(${TARGET_LIB_FAISS} PRIVATE ${MKL_INCLUDE_DIR})
+            target_link_libraries(${TARGET_LIB_FAISS} ${MKL_RT_LIB})
+            get_filename_component(MKL_LIB_DIR ${MKL_RT_LIB} DIRECTORY)
+            target_link_options(${TARGET_LIB_FAISS} PRIVATE "-Wl,-rpath,${MKL_LIB_DIR}")
+        else ()
+            message(FATAL_ERROR "KNN_LINK_MKL=ON but MKL not found (set MKLROOT)")
+        endif ()
+    endif ()
     opensearch_set_common_properties(${TARGET_LIB_FAISS})
     list(APPEND TARGET_LIBS ${TARGET_LIB_FAISS})
 endif ()

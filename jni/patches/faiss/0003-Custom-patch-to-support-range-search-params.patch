@@ -1,18 +1,18 @@
-From 38ac6abaa528e5ade42d60155aea7e1ea4e80899 Mon Sep 17 00:00:00 2001
-From: Junqiu Lei <junqiu@amazon.com>
-Date: Fri, 1 Aug 2025 17:20:56 -0700
-Subject: [PATCH] Custom patch to support range search params
+From 03b81e8f44c9a94291b07597af35b4f3aa16579f Mon Sep 17 00:00:00 2001
+From: Xiao Tang <xtang@intel.com>
+Date: Mon, 8 Jun 2026 10:56:36 +0800
+Subject: [PATCH] Custom patch to support range search params (rebased onto
+ #5235)
 
-Signed-off-by: Junqiu Lei <junqiu@amazon.com>
 ---
  faiss/IndexIDMap.cpp | 28 ++++++++++++++++++++++++----
  1 file changed, 24 insertions(+), 4 deletions(-)
 
 diff --git a/faiss/IndexIDMap.cpp b/faiss/IndexIDMap.cpp
-index 123e8f2ff..8c7a893e3 100644
+index 1a86c8dc0..a0d4dae60 100644
 --- a/faiss/IndexIDMap.cpp
 +++ b/faiss/IndexIDMap.cpp
-@@ -256,11 +256,31 @@ void IndexIDMapTemplate<IndexT>::range_search(
+@@ -258,11 +258,31 @@ void IndexIDMapTemplate<IndexT>::range_search(
          RangeSearchResult* result,
          const SearchParameters* params) const {
      if (params) {
@@ -36,17 +36,18 @@ index 123e8f2ff..8c7a893e3 100644
 +
 +        if (params->grp) {
 +            auto idtrans = dynamic_cast<const IDGrouperTranslated*>(params->grp);
+ 
+-        index->range_search(n, x, radius, result, &internal_search_parameters);
 +            if (!idtrans) {
 +                auto params_non_const = const_cast<SearchParameters*>(params);
 +                this_idgrptrans.grp = params->grp;
 +                grp_change.set(params_non_const, &this_idgrptrans);
 +            }
 +        }
- 
--        index->range_search(n, x, radius, result, &internal_search_parameters);
 +        index->range_search(n, x, radius, result, params);
      } else {
          index->range_search(n, x, radius, result);
      }
 -- 
-2.39.5 (Apple Git-154)
+2.34.1
+

@@ -15,7 +15,8 @@
 #include "faiss/IndexFlatCodes.h"
 #include "faiss/Index.h"
 #include "faiss/impl/DistanceComputer.h"
-#include "faiss/utils/hamming_distance/hamdis-inl.h"
+// June-2026 faiss reorganized hamming_distance/hamdis-inl.h into common.h
+#include "faiss/utils/hamming_distance/common.h"
 #include "faiss/impl/HNSW.h"
 #include <vector>
 #include <cassert>

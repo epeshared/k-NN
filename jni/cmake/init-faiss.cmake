@@ -20,12 +20,11 @@ if(NOT DEFINED APPLY_LIB_PATCHES OR "${APPLY_LIB_PATCHES}" STREQUAL true)
     list(APPEND PATCH_FILE_LIST "${CMAKE_CURRENT_SOURCE_DIR}/patches/faiss/0002-Enable-precomp-table-to-be-shared-ivfpq.patch")
     list(APPEND PATCH_FILE_LIST "${CMAKE_CURRENT_SOURCE_DIR}/patches/faiss/0003-Custom-patch-to-support-range-search-params.patch")
     list(APPEND PATCH_FILE_LIST "${CMAKE_CURRENT_SOURCE_DIR}/patches/faiss/0004-Custom-patch-to-support-binary-vector.patch")
-    list(APPEND PATCH_FILE_LIST "${CMAKE_CURRENT_SOURCE_DIR}/patches/faiss/0005-Custom-patch-to-support-multi-vector-IndexHNSW-search_level_0.patch")
-    list(APPEND PATCH_FILE_LIST "${CMAKE_CURRENT_SOURCE_DIR}/patches/faiss/0006-Add-nested-search-support-for-IndexBinaryHNSWCagra.patch")
-    list(APPEND PATCH_FILE_LIST "${CMAKE_CURRENT_SOURCE_DIR}/patches/faiss/0007-Modify-minor-Faiss-structures-to-support-Faiss-SQ.patch")
-    list(APPEND PATCH_FILE_LIST "${CMAKE_CURRENT_SOURCE_DIR}/patches/faiss/0008-Added-skipping-flat-storage-availability-in-write_in.patch")
-    list(APPEND PATCH_FILE_LIST "${CMAKE_CURRENT_SOURCE_DIR}/patches/faiss/0009-Fixing-radial-search-for-IndexHNSWCagra.patch")
-    list(APPEND PATCH_FILE_LIST "${CMAKE_CURRENT_SOURCE_DIR}/patches/faiss/0010-Make-selective-FAISS_THROW_IF_NOT-d-8-0-in-IndexBina.patch")
+    # NOTE(amx fork): the faiss submodule points at epeshared/faiss-hnsw-amx
+    # (upstream June-2026 + faiss PR #5235 BF16+AMX). Patches 0001-0004 are the
+    # rebased-for-that-base versions and 0005 adapts them to the June-2026 API;
+    # upstream's 0005-0010 are already part of that newer base.
+    list(APPEND PATCH_FILE_LIST "${CMAKE_CURRENT_SOURCE_DIR}/patches/faiss/0005-Adapt-patches-to-faiss-main-June-2026-API.patch")
 
     # Get patch id of the last commit
     execute_process(COMMAND sh -c "git --no-pager show HEAD | git patch-id --stable" OUTPUT_VARIABLE PATCH_ID_OUTPUT_FROM_COMMIT WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/external/faiss)
@@ -96,7 +95,8 @@ endif()
 find_package(ZLIB REQUIRED)
 
 # Statically link BLAS - ensure this is before we find the blas package so we dont dynamically link
-set(BLA_STATIC ON)
+# (amx fork: dynamic BLAS, matches the validated 2.19 BF16+AMX build environment)
+set(BLA_STATIC OFF)
 find_package(BLAS REQUIRED)
 enable_language(Fortran)
 find_package(LAPACK REQUIRED)
@@ -147,3 +147,24 @@ else()
 endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/external/faiss EXCLUDE_FROM_ALL)
+
+# Enable the BF16+AMX HNSW inner-product acceleration (faiss PR #5235) on SPR+
+# platforms. The AMX tile kernel lives in a dedicated SIMD source
+# (faiss/impl/scalar_quantizer/sq-amx.cpp) that upstream compiles only into the
+# separate `faiss_amx` target. Rather than introducing a new JNI library name,
+# we fold that single TU + its per-file flags + the COMPILE_SIMD_AMX macro into
+# the `faiss_avx512_spr` target that opensearch-knn already links and loads on
+# SPR+ hosts. This makes faiss_avx512_spr's source/flag/define set identical to
+# upstream's faiss_amx target, so SINGLE_SIMD_LEVEL resolves to SIMDLevel::AMX
+# and the bf16 + METRIC_INNER_PRODUCT distance computer is statically dispatched
+# to the AMX kernel (all other paths fall back to AVX512 at compile time).
+# Set -DKNN_DISABLE_AMX=ON to build the plain AVX512-SPR variant instead (bf16+IP
+# then runs on the AVX512-BF16 path) -- used for AMX-vs-AVX512 A/B and as a
+# fallback on SPR hosts without AMX.
+if(${CMAKE_SYSTEM_NAME} STREQUAL Linux AND AVX512_SPR_ENABLED AND NOT KNN_DISABLE_AMX)
+    target_sources(faiss_avx512_spr PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/faiss/faiss/impl/scalar_quantizer/sq-amx.cpp)
+    target_compile_options(faiss_avx512_spr PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:-mamx-tile -mamx-bf16>)
+    target_compile_definitions(faiss_avx512_spr PRIVATE COMPILE_SIMD_AMX)
+endif()

@@ -537,6 +537,11 @@ tasks.register('cmakeJniLib', Exec) {
     args.add("-DCOMMIT_LIB_PATCHES=${commit_lib_patches}")
     args.add("-DAPPLY_LIB_PATCHES=${apply_lib_patches}")
     args.add("-DCMAKE_POLICY_VERSION_MINIMUM=3.5")
+    // Link Intel MKL to enable the CAGRA-like AMX batch build (build_method=cagra_cpu).
+    // Usage: ./gradlew buildJniLib run -Pknn_link_mkl (requires MKLROOT or /opt/intel/oneapi/mkl/latest)
+    if (project.hasProperty('knn_link_mkl')) {
+        args.add("-DKNN_LINK_MKL=ON")
+    }
     def javaHome = Jvm.current().getJavaHome()
     logger.lifecycle("Java home directory used by gradle: $javaHome")
     if (Os.isFamily(Os.FAMILY_WINDOWS)) {
@@ -750,6 +755,15 @@ testClusters.integTest {
     commonIntegTestClusters(it, _numNodes)
     // Forcing optimistic search for testing
     systemProperty 'mem_opt_srch.force_reenter', 'true'
+    // AMX-vs-AVX512 A/B for the bf16 paths: force MKL to skip AMX dispatch on
+    // the cluster nodes (same binary). Usage: ./gradlew run -Pmkl_force_avx512
+    if (project.hasProperty('mkl_force_avx512')) {
+        environment 'MKL_ENABLE_INSTRUCTIONS', 'AVX512'
+    }
+    // Benchmarking heap (default test cluster heap is tiny). Usage: -Pcluster_heap=8g
+    if (project.hasProperty('cluster_heap')) {
+        jvmArgs "-Xms${project.property('cluster_heap')}", "-Xmx${project.property('cluster_heap')}"
+    }
 }
 
 testClusters.integTestRemoteIndexBuild {

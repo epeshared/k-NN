@@ -228,6 +228,18 @@ public class NativeIndexWriter {
         // Used to determine how many threads to use when indexing
         parameters.put(KNNConstants.INDEX_THREAD_QTY, KNNSettings.getIndexThreadQty());
 
+        // CAGRA-like batch build: forward the cluster setting to JNI inside the method
+        // parameters map; the native layer falls back to incremental when not eligible.
+        if (KNNEngine.FAISS == knnEngine && KNNConstants.BUILD_METHOD_CAGRA_CPU.equals(KNNSettings.getKnnBuildMethod())) {
+            Object algoParams = parameters.get(PARAMETERS);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> algoMap = algoParams instanceof Map
+                ? new HashMap<>((Map<String, Object>) algoParams)
+                : new HashMap<>();
+            algoMap.put(KNNConstants.BUILD_METHOD_PARAMETER, KNNConstants.BUILD_METHOD_CAGRA_CPU);
+            parameters.put(PARAMETERS, algoMap);
+        }
+
         return parameters;
     }
 

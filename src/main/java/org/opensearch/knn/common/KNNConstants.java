@@ -104,6 +104,10 @@ public class KNNConstants {
     public static final String FAISS_NAME = "faiss";
     public final static String FAISS_EXTENSION = ".faiss";
     public static final String INDEX_DESCRIPTION_PARAMETER = "index_description";
+    // CAGRA-like batch build: forwarded to JNI inside the method parameters map
+    public static final String BUILD_METHOD_PARAMETER = "build_method";
+    public static final String BUILD_METHOD_CAGRA_CPU = "cagra_cpu";
+    public static final String BUILD_METHOD_INCREMENTAL = "incremental";
     public static final String METHOD_ENCODER_PARAMETER = "encoder";
     public static final String METHOD_PARAMETER_NPROBES = "nprobes";
     public static final String ENCODER_FLAT = "flat";

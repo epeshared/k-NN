@@ -8,6 +8,7 @@
 // GitHub history for details.
 
 #include "faiss_index_service.h"
+#include "faiss_cagra_builder.h"
 #include "faiss_methods.h"
 #include "faiss/Index.h"
 #include "faiss/IndexBinary.h"
@@ -66,6 +67,12 @@ void IndexService::allocIndex(faiss::Index * index, size_t dim, size_t numVector
             indexFlat->codes.owned_data.reserve(indexFlat->code_size * numVectors);
         }
     }
+    // CAGRA batch-build index: IndexHNSWCagra with SQ storage (not an IndexHNSWSQ)
+    if (auto * indexHNSWCagra = dynamic_cast<faiss::IndexHNSWCagra *>(index)) {
+        if (auto * indexScalarQuantizer = dynamic_cast<faiss::IndexScalarQuantizer *>(indexHNSWCagra->storage)) {
+            indexScalarQuantizer->codes.owned_data.reserve(indexScalarQuantizer->code_size * numVectors);
+        }
+    }
 }
 
 jlong IndexService::initIndex(
@@ -78,8 +85,24 @@ jlong IndexService::initIndex(
         int threadCount,
         std::unordered_map<std::string, jobject> parameters
     ) {
+    // CAGRA-like batch build (build_method=cagra_cpu): create an IndexHNSWCagra whose
+    // graph is assembled from a batched bf16 GEMM at writeIndex time. Later
+    // insertToIndex/writeIndex calls recognize the index by its type, so no other
+    // state is needed. Ineligible setups fall back to the regular factory path.
+    std::unique_ptr<faiss::Index> index;
+    auto buildMethodIt = parameters.find(knn_jni::BUILD_METHOD);
+    if (buildMethodIt != parameters.end()) {
+        std::string buildMethod = jniUtil->ConvertJavaObjectToCppString(env, buildMethodIt->second);
+        if (buildMethod == "cagra_cpu") {
+            index.reset(knn_jni::cagra_builder::tryCreateCagraBatchIndex(indexDescription, dim, metric, numVectors));
+        }
+        parameters.erase(buildMethodIt);
+    }
+
     // Create index using Faiss factory method
-    std::unique_ptr<faiss::Index> index(faissMethods->indexFactory(dim, indexDescription.c_str(), metric));
+    if (!index) {
+        index.reset(faissMethods->indexFactory(dim, indexDescription.c_str(), metric));
+    }
 
     // Set thread count if it is passed in as a parameter. Setting this variable will only impact the current thread
     if (threadCount != 0) {
@@ -134,6 +157,12 @@ void IndexService::insertToIndex(
 
     faiss::IndexIDMap * idMap = reinterpret_cast<faiss::IndexIDMap *> (idMapAddress);
 
+    // CAGRA batch build: encode the chunk into storage only; graph is built in writeIndex
+    if (auto * cagra = knn_jni::cagra_builder::asCagraBatchIndex(idMap)) {
+        knn_jni::cagra_builder::insertStorageOnly(idMap, cagra, numVectors, inputVectors->data(), ids.data());
+        return;
+    }
+
     // Add vectors
     idMap->add_with_ids(numVectors, inputVectors->data(), ids.data());
 }
@@ -143,6 +172,12 @@ void IndexService::writeIndex(
     jlong idMapAddress
 ) {
     std::unique_ptr<faiss::IndexIDMap> idMap (reinterpret_cast<faiss::IndexIDMap *> (idMapAddress));
+
+    // CAGRA batch build: all vectors arrived, compute the kNN graph (bf16 GEMM)
+    // and assemble level-0 before serializing. Build errors surface as-is.
+    if (auto * cagra = knn_jni::cagra_builder::asCagraBatchIndex(idMap.get())) {
+        knn_jni::cagra_builder::finalizeGraph(cagra);
+    }
 
     try {
         // Write the index to disk
